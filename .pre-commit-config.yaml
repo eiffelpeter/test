@@ -1,0 +1,61 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+#
+exclude:
+    (?x)^(
+        main\/lib\/js0n\/.*|
+        main/app/uc_mic_bsp/services/audio/fwr.c
+    )$
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+        exclude:
+            (?x)^(
+                .clang-format
+            )$
+    -   id: check-added-large-files
+    -   id: check-merge-conflict
+-   repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v13.0.0
+    hooks:
+      - id: clang-format
+        exclude:
+            (?x)^(
+                main/app/uc_thermostat_fw/lv_conf.h
+            )$
+- repo: local
+  hooks:
+    - id: cppcheck
+      name: cppcheck
+      entry: cppcheck
+      language: system
+      args:
+        [
+          -q,
+          --enable=all,
+          --inline-suppr,
+          --suppress=unusedFunction,
+          --suppress=unmatchedSuppression,
+          --suppress=missingIncludeSystem,
+          --suppress=missingInclude,
+          --suppress=toomanyconfigs,
+          --suppress=variableScope,
+          --suppress=unreadVariable,
+          --suppress=constParameter,
+          --suppress=unusedLabelConfiguration,
+          --suppress=unusedLabel,
+          --error-exitcode=1,
+          --platform=unix32,
+          -DCONFIG_ESP_CONSOLE_UART_NUM=1,
+          -DPB_PROTO_HEADER_VERSION=40
+        ]
+      files: \.(c|h|cpp)$
+      exclude:
+          (?x)^(
+              components/libbf/libbf/.*|
+              main/app/spiffs_littlefs_comparison/.*
+          )$
