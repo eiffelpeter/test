@@ -1,11 +1,11 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 #
-exclude:
-    (?x)^(
-        main\/lib\/js0n\/.*|
-        main/app/uc_mic_bsp/services/audio/fwr.c
-    )$
+#exclude:
+#    (?x)^(
+#        main\/lib\/js0n\/.*|
+#        main/app/uc_mic_bsp/services/audio/fwr.c
+#    )$
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.2.0
@@ -23,10 +23,10 @@ repos:
     rev: v13.0.0
     hooks:
       - id: clang-format
-        exclude:
-            (?x)^(
-                main/app/uc_thermostat_fw/lv_conf.h
-            )$
+#        exclude:
+#            (?x)^(
+#                main/app/uc_thermostat_fw/lv_conf.h
+#            )$
 - repo: local
   hooks:
     - id: cppcheck
@@ -54,8 +54,8 @@ repos:
           -DPB_PROTO_HEADER_VERSION=40
         ]
       files: \.(c|h|cpp)$
-      exclude:
-          (?x)^(
-              components/libbf/libbf/.*|
-              main/app/spiffs_littlefs_comparison/.*
-          )$
+#      exclude:
+#          (?x)^(
+#              components/libbf/libbf/.*|
+#              main/app/spiffs_littlefs_comparison/.*
+#          )$
