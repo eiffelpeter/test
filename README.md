@@ -1,4 +1,4 @@
-# Install below packages 
+# Install below packages on ubuntu
 ```sudo apt update 
 sudo apt install git 
 sudo apt install python3
@@ -7,5 +7,8 @@ sudo apt install cppcheck
 sudo apt install clang-format
 ```
 
-# Execute
+# clang-format code to LLVM style and ccpcheck
 `pre-commit run --all-files`
+
+# Build code to exe file 
+`gcc test.c -o test`
