@@ -12,3 +12,9 @@ sudo apt install clang-format
 
 # Build code to exe file 
 `gcc test.c -o test`
+
+# Doxygen to list APIs
+```doxygen -g
+doxygen Doxyfile
+```
+[link](./html/files.html)
