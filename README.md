@@ -1,4 +1,4 @@
-# Install below packages 
+# Install below packages on ubuntu
 ```sudo apt update 
 sudo apt install git 
 sudo apt install python3
@@ -15,6 +15,6 @@ sudo apt install clang-format
 
 # Doxygen to list APIs
 ```doxygen -g
-doxygen Doxyfile```
-
+doxygen Doxyfile
+```
 [link](./html/files.html)
