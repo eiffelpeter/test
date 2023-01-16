@@ -7,8 +7,11 @@ sudo apt install cppcheck
 sudo apt install clang-format
 ```
 
-# Execute to format c file
+# clang-format code to LLVM style and ccpcheck
 `pre-commit run --all-files`
+
+# Build code to exe file 
+`gcc test.c -o test`
 
 # Doxygen to list APIs
 ```doxygen -g
