@@ -11,11 +11,22 @@ repos:
     rev: v3.2.0
     hooks:
     -   id: trailing-whitespace
+        exclude:
+            (?x)^(
+                html/.*|
+                README.md
+            )$
     -   id: end-of-file-fixer
+        exclude:
+            (?x)^(
+                html/.*
+            )$
     -   id: check-yaml
         exclude:
             (?x)^(
-                .clang-format
+                html/.*|
+                .clang-format|
+                README.md
             )$
     -   id: check-added-large-files
     -   id: check-merge-conflict
