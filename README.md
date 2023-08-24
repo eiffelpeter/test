@@ -20,3 +20,11 @@ doxygen -g
 doxygen Doxyfile
 ```
 [link](./html/files.html)
+
+# Install ARM64 gcc
+```
+sudo apt-get install -y gcc-aarch64-linux-gnu????
+```
+
+# Compiler it
+`aarch64-linux-gnu-gcc -Wall -static test.c -o test`
