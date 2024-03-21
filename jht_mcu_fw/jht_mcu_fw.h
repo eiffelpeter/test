@@ -1,0 +1,50 @@
+#ifndef	__MCU_H__
+#define	__MCU_H__
+
+#define MAX_REPLY_SIZE 512
+#define MAX_BUFF_SIZE MAX_REPLY_SIZE
+
+#define UARTIO_OK 0
+#define ERR_OPEN -1
+#define ERR_CLOSE -2
+#define ERR_READ -3
+#define ERR_WRITE -4
+#define ERR_DATA_MISMATCH -5
+
+#define CLASS_ETHERNET_MAC 0
+#define CLASS_SERIAL_NO 1
+#define CLASS_ASSY 2
+#define CLASS_SERIAL_NO1 3
+#define CLASS_ASSY1 4
+#define CLASS_SERIAL_NO2 5
+
+#define LEN_ETHERNET_MAC 6
+#define LEN_SERIAL_NO 12
+#define LEN_ASSY 4
+
+#define RST_SUCCESS 0x0000
+#define RST_UNKNOWN_COMMAND 0x0001
+#define RST_INVALID_PAYLOAD_LENGTH 0x0002
+#define RST_INVALID_PARAMETERS 0x0003
+#define RST_INVALID_ADDRESS 0x0004
+#define RST_INVALID_PASSWORD 0x0005
+#define RST_INVALID_FAILURE 0x0006
+
+#define CMD_VERSION 0x0300
+#define CMD_SYSTEM_PARAM 0x000A
+#define CMD_RECOVERY_STATE 0x0305
+#define CMD_SYSTEM_STATE 0x0307
+#define CMD_UPDATE_PARAMETER 0x0400
+#define CMD_EARSE_CODE 0x0401
+#define CMD_WRITE_CODE 0x0402
+#define CMD_READ_CODE 0x0403
+#define CMD_START_UPDATE 0x0404
+#define CMD_END_UPDATE 0x0405
+#define CMD_OPERATION_MODE 0x0406
+#define CMD_APPLICATION_NAME 0x0407
+#define CMD_PROGRAM_STATE 0x0408
+
+int getSystemState(char *replyPayload, char classVal);
+int getRecoveryState(char *replyPayload);
+
+#endif	/* __MCU_H__ */
