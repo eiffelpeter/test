@@ -1,0 +1,163 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Obtaining tilt (acceleration) using the Web Bluetooth function</title>
+<script>
+ 
+var targetDevice;
+
+
+  
+//////////////////////////////////////////////////
+/// connection
+//////////////////////////////////////////////////
+function getAccelerometer() {
+
+  //////////////////////////////////////////////////
+  /// Display of tilt (acceleration)
+  //////////////////////////////////////////////////
+  function onAccelerometerChanged (event) {
+    let accelerometer_x = event.target.value.getInt16(0, true);
+    let accelerometer_y = event.target.value.getInt16(2, true);
+    let accelerometer_z = event.target.value.getInt16(4, true);
+    console.log('Tilt (acceleration) X: ' + accelerometer_x + ' Y: ' + accelerometer_y +' Z: ' + accelerometer_z);
+    document.getElementById("accelerometer").innerText = ' X: ' + accelerometer_x + ' Y: ' + accelerometer_y +' Z: ' + accelerometer_z ;
+
+    //////////////////////////////////////////////////
+    /// Display something on the screen only when you look up
+    //////////////////////////////////////////////////
+//    if(accelerometer_x > 700){ // Specify how much the object must be tilted to be considered facing up.
+//
+//        //////////////////////////////////////////////////
+//        /// Cumulative display of the number of times you look up as an image
+//        //////////////////////////////////////////////////
+//        let addimg = document.getElementById("showimg").innerHTML ;
+//        document.getElementById("showimg").innerHTML = addimg + "<img src ='../img/lookup.png'>";
+//
+//        //////////////////////////////////////////////////
+//        /// Display that adds the date and time when you look up
+//        //////////////////////////////////////////////////
+//        let lookupText = document.getElementById("lookup").innerText ;
+//        let youbi = ["日","月","火","水","木","金","土"];
+//        let fullDate = new Date();
+//        let dateTime = fullDate.getFullYear() + "年" + 
+//			(fullDate.getMonth() + 1)  + "月" + 
+//			fullDate.getDate() + "日　" + 
+//			fullDate.getHours() + "時" + 
+//			fullDate.getMinutes() + "分" + 
+//			fullDate.getSeconds() + "秒" +
+//                        fullDate.getMilliseconds() + "ms　" + 
+//			youbi[fullDate.getDay()] + "曜日" ; // 0 is Sunday - 6 is Saturday
+//        document.getElementById("lookup").innerText = lookupText + ' looked up ' + dateTime + '\n';
+//    }
+  } 
+   
+  //////////////////////////////////////////////////
+  /// Constant definition
+  //////////////////////////////////////////////////
+  /// UUID
+  const UUID_ACCELEROMETER_SERVICE = 'e95d0753-251d-470a-a062-fa1922dfa9a8'
+  const UUID_ACCELEROMETER_SERVICE_CHARACTERISTIC_DATA   = 'e95dca4b-251d-470a-a062-fa1922dfa9a8'
+  const UUID_ACCELEROMETER_SERVICE_CHARACTERISTIC_PERIOD = 'e95dfb24-251d-470a-a062-fa1922dfa9a8'
+ 
+  /// Acquisition interval (ms)
+  const INTERVAL = 1000
+ 
+  //////////////////////////////////////////////////
+  /// Device scan
+  //////////////////////////////////////////////////
+  navigator.bluetooth.requestDevice({
+    filters: [
+      { namePrefix: "ESP32" }
+    ],
+    optionalServices: [UUID_ACCELEROMETER_SERVICE]
+  })
+  //////////////////////////////////////////////////
+  /// GATT connect
+  //////////////////////////////////////////////////
+  .then(device => {
+    targetDevice = device;
+    console.log("device", device);
+    return device.gatt.connect();
+  })
+  //////////////////////////////////////////////////
+  /// Obtain primary service
+  //////////////////////////////////////////////////
+    .then(server => {
+    console.log('server', server);
+    server.getPrimaryService(UUID_ACCELEROMETER_SERVICE)
+    //////////////////////////////////////////////////
+    /// Obtaining tilt (acceleration)
+    //////////////////////////////////////////////////
+    .then(service => {
+      /// Setting the acquisition interval for tilt (acceleration)
+//      service.getCharacteristic(UUID_ACCELEROMETER_SERVICE_CHARACTERISTIC_PERIOD)
+//      .then(characteristic => {
+//        characteristic.writeValue(new Uint16Array([INTERVAL]));
+//      })
+//      .catch(error => {
+//        console.log(error);
+//        alert('Failed to set acquisition interval.');
+//      })
+ 
+      /// Start acquiring tilt (acceleration)
+      service.getCharacteristic(UUID_ACCELEROMETER_SERVICE_CHARACTERISTIC_DATA)
+      .then(characteristic => {
+        characteristic.startNotifications()
+        .then(char => {
+          alert('Connected.');
+          characteristic.addEventListener('characteristicvaluechanged',onAccelerometerChanged);
+          console.log('Accelerometer : ', char);
+        })
+      })
+      .catch(error => {
+        console.log(error);
+        alert('Failed to start acquisition.');
+      })
+    })
+  })
+  .catch(error => {
+    console.log(error);
+    alert('connection failed');
+  });
+ 
+
+}
+
+//////////////////////////////////////////////////
+/// disconnect
+//////////////////////////////////////////////////
+function disconnect() {
+ 
+  if (!targetDevice || !targetDevice.gatt.connected){
+    return;
+  }
+  targetDevice.gatt.disconnect();
+  document.getElementById("showimg").innerHTML = '' ;
+  document.getElementById("accelerometer").innerText = 'Connect with micro:bit and obtain the tilt (acceleration)' ;
+  document.getElementById("lookup").innerText = '' ;
+  alert("disconnected");
+ 
+}
+ 
+</script>
+</head>
+
+<body>
+<div id="BLE_accelerometer">
+  <div id="BLE_title">
+    <h3>Obtaining tilt (acceleration) using the Web Bluetooth function</h3>
+  </div>
+  <div id="BLE_button">
+    <input type="button" value="connect" onclick="getAccelerometer();"/> 
+    <input type="button" value="disconnect" onclick="disconnect();"/> 
+  </div>
+  <div id="showimg"></div>
+  <div id="BLE_display">
+    <p>Tilt (acceleration): <span id="accelerometer">Connect ble device and obtain the tilt (acceleration)</span></p>
+    <p><span id="lookup"></span></p>
+  <div>
+</div>
+</body>
+</html>
