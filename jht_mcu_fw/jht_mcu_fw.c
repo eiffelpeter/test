@@ -20,7 +20,7 @@
 #include "SocUart.h"
 #include "MemoryFlashWriteRead.h"
 
-#define UART_PORT "/dev/ttymxc1" // "/dev/ttyS4" // "/dev/ttymxc3" // 
+#define UART_PORT "/dev/ttymxc3" // "/dev/ttyS4" // "/dev/ttymxc1" // 
 //#define DEBUG 1
 
 unsigned char FwDta[0x300] = {0};
@@ -116,7 +116,7 @@ int chimera_uart_init(void)
 		return 0;
 	}
 	else {
-		printf("open fail \n");
+		printf("open uart fail \n");
 		return -1;
 	}
 }
@@ -150,7 +150,7 @@ int chimera_uart_gets(char *msg, int len)
 	FD_ZERO(&fds);
 	FD_SET(fd, &fds);
 	timeout.tv_sec = 0;
-	timeout.tv_usec = 100 * 1000;	// 100ms
+	timeout.tv_usec = 100 * 1000;	// 100ms ,   0x230 * (8 data + 1 start bit + 1 stop bit) / 115200 = 48.61ms
 	ret = select(FD_SETSIZE, &fds, NULL, NULL, &timeout);
 	if (ret == 1) {
 		n = read(fd, msg, len);         
@@ -333,13 +333,17 @@ int main(int argc, char **argv) {
 	printf("open bin file %s\n", argv[1]);
 
 	// open bin file 
-    FILE *fp = fopen(argv[1], "rb");	// adb push MCU_0002.bin /data/
+    FILE *fp = fopen(argv[1], "rb+");	// adb push MCU_0002.bin /data/
 
 	if (fp) {
 
+		// init tty
 		if ( 0 != chimera_uart_init() )
+		{
+			fclose(fp);
 			return -1;
-	
+		}
+
 		if ( getVersion(version) > 0 )
 		{
 			printf("version %d %d\n", version[0], version[1]);
@@ -348,25 +352,25 @@ int main(int argc, char **argv) {
 
 		printf("Start_Update\n");
 		memcpy(FwDta, "johnson", 7);
-		SendHostSocCmd(Start_Update, 7, FwDta);				//Start Update flowchar to Unlock the Iap mode.
+		SendHostSocCmd(Start_Update, 7, FwDta);			//Start Update flowchar to Unlock the Iap mode.
 		SoCUartReceiveCtrl();
-		while(HostCmdWaitReply);	
+		while(HostCmdWaitReply);
 		memset(FwDta, 0, 7);
 		sleep(3);
-	
+
 //  	printf("Application_Name\n");
 //  	SendHostSocCmd(Application_Name, 0, NULL);      //Read the machine name.
 //  	SoCUartReceiveCtrl();
-		// while(HostCmdWaitReply);											//Waiting the command reply...
-	
+		// while(HostCmdWaitReply);						//Waiting the command reply...
+
 		printf("Update_Parameter\n");
 		SendHostSocCmd(Update_Parameter, 0, NULL);		//Read the MCU memory status.
 		SoCUartReceiveCtrl();
-		// while(HostCmdWaitReply);											//Waiting the command reply...
-	
-		SendHostSocCmd(Earse_Code, 0, NULL);					//Erase the MCU memory flash.
+		// while(HostCmdWaitReply);						//Waiting the command reply...
+
+		SendHostSocCmd(Earse_Code, 0, NULL);			//Erase the MCU memory flash.
 		SoCUartReceiveCtrl();
-		sleep(3);															//Waiting the MCU erase command success.
+		sleep(3);										//Waiting the MCU erase command success.
 
 		uLONG offset = 0;
 		uLONG write_len;
@@ -395,54 +399,51 @@ int main(int argc, char **argv) {
             fseek(fp, offset, SEEK_SET);
             fread(pRWCtl->pDta, pRWCtl->Length, 1, fp);
 
-
-			SendHostSocCmd(Write_Code, 520, RWCtl);         //Write the MCU memory flash.
+			SendHostSocCmd(Write_Code, 520, RWCtl);			//Write the MCU memory flash.
 			SoCUartReceiveCtrl();
-			while(HostCmdWaitReply){};                                  //Waiting the command reply...
-	
- 			{
-				SendHostSocCmd(Read_Code, 8, RWCtl);              //Read the MCU memory flash.
-				SoCUartReceiveCtrl();
-				while(HostCmdWaitReply);                                        //Waiting the command reply...
-				if(memcmp(pRWCtl->pDta, ReadBinTemp+4, pRWCtl->Length) == 0)
-				{
-					printf("Update:%d %%, idx:%d, write_len:%ld, offset:%ld\r\n",(uINT)((offset*100)/(bin_size)), idx, write_len, offset);
+			while(HostCmdWaitReply);						//Waiting the command reply...
 
-					pMemInf->AppStartAddr += write_len;
-					offset += write_len;	// for next fseek
-					idx++;
-//		            printf("Write/Read flowchar is success!!!\r");
-				}
-				else
+			SendHostSocCmd(Read_Code, 8, RWCtl);			//Read the MCU memory flash.
+			SoCUartReceiveCtrl();
+			while(HostCmdWaitReply);						//Waiting the command reply...
+			if(memcmp(pRWCtl->pDta, ReadBinTemp+4, pRWCtl->Length) == 0)
+			{
+				printf("Update:%d %%, idx:%d, write_len:%ld, offset:%ld\r\n",(uINT)((offset*100)/(bin_size)), idx, write_len, offset);
+
+				pMemInf->AppStartAddr += write_len;
+				offset += write_len;						// for next fseek
+				idx++;
+//		        printf("Write/Read flowchar is success!!!\r");
+			}
+			else
+			{
+				printf("Write/Read flowchar is fail!!!\r\n");
+				printf("Send Dta :");
+				for(uINT Cnt=0; Cnt<pRWCtl->Length; Cnt++)
 				{
-					printf("Write/Read flowchar is fail!!!\r\n");
-					printf("Send Dta :");
-					for(uINT Cnt=0; Cnt<pRWCtl->Length; Cnt++)
-					{
-						if((Cnt%16) == 0)
-							printf("\r\n0x%02X ", *(pRWCtl->pDta+Cnt));
-						else
-							printf("0x%02X ", *(pRWCtl->pDta+Cnt));
-					}
-					printf("\r\n\r\n");
-	
-					printf("Receive Dta :");
-					for(uINT Cnt=0; Cnt<pRWCtl->Length; Cnt++)
-					{
-						if((Cnt%16) == 0)
-							printf("\r\n0x%02X ", *(ReadBinTemp+4+Cnt));
-						else
-							printf("0x%02X ", *(ReadBinTemp+4+Cnt));
-					}
-					printf("\r\n\r\n");
-					while(1);
+					if((Cnt%16) == 0)
+						printf("\r\n0x%02X ", *(pRWCtl->pDta+Cnt));
+					else
+						printf("0x%02X ", *(pRWCtl->pDta+Cnt));
 				}
- 			}
+				printf("\r\n\r\n");
+	
+				printf("Receive Dta :");
+				for(uINT Cnt=0; Cnt<pRWCtl->Length; Cnt++)
+				{
+					if((Cnt%16) == 0)
+						printf("\r\n0x%02X ", *(ReadBinTemp+4+Cnt));
+					else
+						printf("0x%02X ", *(ReadBinTemp+4+Cnt));
+				}
+				printf("\r\n\r\n");
+				while(1);
+			}
 		}
 
 		fclose(fp);
 
-		if ((pMemInf->AppStartAddr == pMemInf->AppEndAddr)) {
+		if (pMemInf->AppStartAddr == pMemInf->AppEndAddr) {
 			printf("Update:100 %%\r\n");
 		}
 
