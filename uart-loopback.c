@@ -137,17 +137,6 @@ int setup_port(int fd, int baud, int databits, int parity, int stopbits)
 
 	return 0;
 }
-//void print_usage(char *prg)
-//{
-//    fprintf(stderr, "\nUsage: %s [options] tty\n\n", prg);
-//    fprintf(stderr, "Options: -b <baud>  (uart baud rate)\n");
-//    fprintf(stderr, "Options: -c <count>  (ascii count)\n");
-//    fprintf(stderr, "         -?         (show this help)\n");
-//    fprintf(stderr, "\nExample:\n");
-//    fprintf(stderr, "uart-loopback /dev/ttyS1\n");
-//    fprintf(stderr, "\n");
-//    exit(1);
-//}
 
 void print_usage(char *program_name)
 {
@@ -155,11 +144,8 @@ void print_usage(char *program_name)
 			"*************************************\n"
 			"  A Simple Serial Port Test Utility\n"
 			"*************************************\n\n"
-			"Usage:\n  %s <device> <baud> <databits> <parity> <stopbits> \n"
-			"       databits: 5, 6, 7, 8\n"
-			"       parity: 0(None), 1(Odd), 2(Even)\n"
-			"       stopbits: 1, 2\n"
-			"Example:\n  %s /dev/ttymxc1 115200 8 0 1\n\n",
+			"Usage:\n  %s <device> <baud> <loops> \n"
+			"Example:\n  %s /dev/ttymxc1 115200 1\n\n",
 			program_name, program_name
 		   );
 }
@@ -171,11 +157,10 @@ int main(int argc, char **argv)
 	int fd,ret;
 	char *tty;
 	char j[2];
-	//char *btr = NULL;
-	//int opt,
 	int count=127;
 	char i;
 	int cnt = 0;
+	int loops;
 
 	int baud = 115200;
 	int databits = 8;
@@ -187,51 +172,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+
+	if (argv[3]) {
+		loops = atoi(argv[3]);
+		fprintf(stderr, "loops:%d \n", loops);
+	} else {
+		loops = -1;
+		fprintf(stderr, "loops forever \n");
+	}
+
+
 	baud = atoi(argv[2]);
 	if ((baud < 0) || (baud > 921600)) {
 		fprintf(stderr, "Invalid baudrate!\n");
 		return 1;
 	}
-#if 0 
-	databits = atoi(argv[3]);
-	if ((databits < 5) || (databits > 8)) {
-		fprintf(stderr, "Invalid databits! %d\n", databits);
-		return 1;
-	}
-
-	parity = atoi(argv[4]);
-	if ((parity < 0) || (parity > 2)) {
-		fprintf(stderr, "Invalid parity!\n");
-		return 1;
-	}
-
-	stopbits = atoi(argv[5]);
-	if ((stopbits < 1) || (stopbits > 2)) {
-		fprintf(stderr, "Invalid stopbits!\n");
-		return 1;
-	}
-#endif
-//  while ((opt = getopt(argc, argv, "bc:?")) != -1) {
-//      switch (opt) {
-//      case 'b':
-//          btr = optarg;
-//          printf("baud=%s\n",btr);
-//          break;
-//
-//      case 'c':
-//          count = atoi(optarg);
-//          break;
-//
-//      case '?':
-//      default:
-//          print_usage(argv[0]);
-//          break;
-//      }
-//  }
-
-
-//  if (argc - optind != 1)
-//      print_usage(argv[0]);
 
 	tty = argv[1];
 
@@ -250,7 +205,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	while (1) {
+	while (loops != cnt) {
 
 		tcflush(fd, TCIFLUSH);
 
@@ -288,8 +243,7 @@ int main(int argc, char **argv)
 
 		cnt++;
 		if (count+33 == i) {
-			if (cnt%100 == 0)
-				printf("test success %d\n", cnt);
+            printf("test success %d\n", cnt);
 		} else {
 			printf("test fail %d\n", cnt);
 			exit(1);
