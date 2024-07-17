@@ -157,7 +157,8 @@ int main(int argc, char **argv)
 	int fd,ret;
 	char *tty;
 	char j[2];
-	int count=127;
+	const int begin=32;		// ascii printable character
+	const int end=255;		// ascii extended character
 	char i;
 	int cnt = 0;
 	int loops;
@@ -209,7 +210,7 @@ int main(int argc, char **argv)
 
 		tcflush(fd, TCIFLUSH);
 
-		for (i=33; i < count+33; i++) {
+		for (i = begin; i < end; i++) {
 			ret=write(fd,&i, 1);
 			if (ret != 1) {
 				printf("write error!\n");
@@ -219,21 +220,22 @@ int main(int argc, char **argv)
 			FD_SET(fd, &readfs);  /* set testing source */
 
 			/* set timeout value within input loop */
-			Timeout.tv_usec = 100 * 1000;  /* milliseconds */
+			Timeout.tv_usec = 10 * 1000;  /* milliseconds, the interval between two bytes is 500us~800us by measure on scope*/
 			Timeout.tv_sec  = 0;  /* seconds */
 			ret = select(fd+1, &readfs, NULL, NULL, &Timeout);
-			if (ret==0) {
+			if (ret == 0) {
 				printf("read timeout error!\n");
 				exit(1);
 			} else
 				ret=read(fd, &j, 1);
 
-			if (ret!=1) {
+			if (ret != 1) {
 				printf("read error!\n");
 				exit(1);
 			}
 
-			if (i!=j[0]) {
+			// compare write and read ascii
+			if (i != j[0]) {
 				printf("read data error: wrote 0x%x read 0x%x\n",i,j[0]);
 				exit(1);
 			}
@@ -242,8 +244,8 @@ int main(int argc, char **argv)
 		}
 
 		cnt++;
-		if (count+33 == i) {
-            printf("test success %d\n", cnt);
+		if (end == i) {
+			printf("test success %d\n", cnt);
 		} else {
 			printf("test fail %d\n", cnt);
 			exit(1);
