@@ -337,7 +337,13 @@ bool hrm8700_process_rx_data(const char *data, const int length)
 			checksum = Fletcher16(&data[idx + 4], len-4);  // -4 : command - length - checksum low - checksum high
 
 			if ( checksum == (data[idx + 2] | data[idx + 3] << 8) ) {
-				if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x09) && (data[idx + 7] == 0x03)) {
+				if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x07) ) {
+					printf("workout %s\n", (data[idx + 7] == 1) ? "success" : "fail");
+					ret = (data[idx + 7] == 1) ? true : false;
+		        } else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0e) && (data[idx + 6] == 0x30) && (data[idx + 7] == 0x01)) {
+					printf("Workout has started already\n");
+					ret = true;
+		        } else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x09) && (data[idx + 7] == 0x03)) {
 					printf("hand on\n");
 					ret = true;
 				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x09) && (data[idx + 7] == 0x04)) {
