@@ -13,6 +13,7 @@
 
 #define MAX_REPLY_SIZE 128
 
+int fd;
 volatile sig_atomic_t run_flag = 1;
 
 static void exit_handler(int sig) {	// can be called asynchronously
@@ -28,50 +29,11 @@ void printBytes(const char *data, int len)
 	printf("\n");
 }
 
-int uart_puts(const char *msg, int len)
+int uart_init(void)
 {
-	int n = 0;
 	struct termios s_alicat;
 
-	int fd = open("/dev/ttyS7", O_RDWR | O_NOCTTY | O_NDELAY);
-
-	if (fd != -1) {
-		if (tcgetattr(fd, &s_alicat) < 0) {
-			printf("Error from tcgetattr: %s\n", strerror(errno));
-			return -1;
-		}
-
-		cfsetospeed(&s_alicat, B9600);
-		cfsetispeed(&s_alicat, B9600);
-
-		tcflush(fd, TCIFLUSH); //discard file information not transmitted
-		if (tcsetattr(fd, TCSANOW, &s_alicat) != 0) {
-			printf("Error from tcsetattr: %s\n", strerror(errno));
-			return -1;
-		}
-
-		n = write(fd, msg, len);
-		close(fd);
-#ifdef DEBUG
-		printf("Uart_write - len:%d\n", n);
-		printBytes(msg, n);
-#endif
-		return n;
-	} else {
-		printf("open fail \n");
-		return -1;
-	}
-}
-
-int uart_gets(char *msg, int len)
-{
-	fd_set fds;
-	struct timeval timeout;
-	int ret;
-	int n = 0;
-	struct termios s_alicat;
-
-	int fd = open("/dev/ttyS7", O_RDWR | O_NONBLOCK ); //O_NOCTTY | O_NDELAY);
+	fd = open("/dev/ttyS7", O_RDWR | O_NONBLOCK ); //O_NOCTTY | O_NDELAY);
 
 	if (fd != -1) {
 
@@ -114,27 +76,49 @@ int uart_gets(char *msg, int len)
 			printf("Error from tcsetattr: %s\n", strerror(errno));
 			return -1;
 		}
-
-		FD_ZERO(&fds);
-		FD_SET(fd, &fds);
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 1000 * 1000;	// 1000ms
-		ret = select(FD_SETSIZE, &fds, NULL, NULL, &timeout);
-		if (ret == 1) {
-			n = read(fd, msg, len);
-		}
-		close(fd);
-#ifdef DEBUG
-		if (n > 0) {
-			printf("Uart_read - len:%d \n", n); 
-			printBytes(msg, n);
-		}
-#endif
-		return n;
+		return 0;
 	} else {
 		printf("open fail \n");
 		return -1;
 	}
+}
+
+int uart_puts(const char *msg, int len)
+{
+	int n = 0;
+
+	n = write(fd, msg, len);
+
+#ifdef DEBUG
+	printf("Uart_write - len:%d\n", n);
+	printBytes(msg, n);
+#endif
+	return n;
+}
+
+int uart_gets(char *msg, int len)
+{
+	fd_set fds;
+	struct timeval timeout;
+	int ret;
+	int n = 0;
+
+	FD_ZERO(&fds);
+	FD_SET(fd, &fds);
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 200 * 1000;	// 200ms
+	ret = select(FD_SETSIZE, &fds, NULL, NULL, &timeout);
+	if (ret == 1) {
+		n = read(fd, msg, len);
+	}
+
+#ifdef DEBUG
+	if (n > 0) {
+		printf("Uart_read - len:%d \n", n); 
+		printBytes(msg, n);
+	}
+#endif
+	return n;
 }
 
 void pr_buf(const char * data, int length)
@@ -162,7 +146,7 @@ unsigned short Fletcher16(const char *data, int count )
 	// Compute the checksum bytes based on the summed bytes.
 	ChkSumLoByte = 255 - (((sum1 & 0xFF) + (sum1 >> 8)) % 0xFF);
 	ChkSumHiByte = 255 - ((ChkSumLoByte + (sum1 & 0xFF)) % 0xFF);
-	return (ChkSumLoByte | (ChkSumHiByte << 8));
+	return(ChkSumLoByte | (ChkSumHiByte << 8));
 }
 
 void hrm8700_get_system_status() {
@@ -328,6 +312,13 @@ bool hrm8700_process_rx_data(const char *data, const int length)
 	int len, idx = 0;
 	unsigned short checksum;
 	bool ret = false;
+	unsigned long ms;
+	struct timeval curr_time;
+	static struct timeval prev_time;
+
+	gettimeofday(&curr_time,NULL);
+	ms = (1000 * (curr_time.tv_sec-prev_time.tv_sec)) + ((curr_time.tv_usec-prev_time.tv_usec) / 1000);	// diff
+
 
 	while (idx < length) {
 
@@ -340,22 +331,22 @@ bool hrm8700_process_rx_data(const char *data, const int length)
 				if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x07) ) {
 					printf("workout %s\n", (data[idx + 7] == 1) ? "success" : "fail");
 					ret = (data[idx + 7] == 1) ? true : false;
-		        } else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0e) && (data[idx + 6] == 0x30) && (data[idx + 7] == 0x01)) {
+				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0e) && (data[idx + 6] == 0x30) && (data[idx + 7] == 0x01)) {
 					printf("Workout has started already\n");
 					ret = true;
-		        } else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x09) && (data[idx + 7] == 0x03)) {
-					printf("hand on\n");
+				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x09) && (data[idx + 7] == 0x03)) {
+					printf("[%ld] hand on\n", ms);
 					ret = true;
 				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x09) && (data[idx + 7] == 0x04)) {
-					printf("hand off\n");
+					printf("[%ld] hand off\n", ms);
 					ret = true;
 				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x23) ) {
-					printf("hr: ");
+					printf("[%ld] hr: ", ms);
 					printf("%d", data[idx + 7]);
 					printf("\n");
 					ret = true;
 				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0F) && (data[idx + 6] == 0x14) ) {
-					printf("rr: ");
+					printf("[%ld] rr: ", ms);
 					printf("%d", ((data[idx + 8] << 8) | data[idx + 7]));
 					printf("\n");
 					ret = true;
@@ -383,6 +374,8 @@ bool hrm8700_process_rx_data(const char *data, const int length)
 		}
 	}
 
+	prev_time = curr_time;
+
 	return ret;
 }
 
@@ -394,6 +387,10 @@ int main(int argc, char **argv) {
 
 	// Register signals
 	signal(SIGINT, exit_handler);
+
+	if ( 0 != uart_init()) {
+		return -1;
+	}
 	//hrm8700_get_software_version();
 
 	hrm8700_start_workout(1);
@@ -415,5 +412,6 @@ int main(int argc, char **argv) {
 
 	hrm8700_stop_workout();
 
+	close(fd);
 	return ret;
 }
