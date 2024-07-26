@@ -145,14 +145,11 @@ int uart_puts(const char *msg, int len)
 {
 	int n = 0;
 
-	// for JHT LCB	
-	setRTS(fd, 1);
-	usleep(2000);
+	// for JHT LCB
+	usleep(10*1000);
+	setRTS(fd, 1);  
 
 	n = write(fd, msg, len);
-
-	setRTS(fd, 1);
-	usleep((len*1000)+2000);
 
 #ifdef DEBUG
 	printf("Uart_write - len:%d\n", n);
@@ -168,7 +165,10 @@ int uart_gets(char *msg, int len)
 	int ret;
 	int n = 0;
 
-	setRTS(fd, 0); // set to listen mode 
+	// for JHT LCB
+	usleep(10*1000);
+	setRTS(fd, 0);
+
 
 	FD_ZERO(&fds);
 	FD_SET(fd, &fds);
@@ -236,21 +236,39 @@ void jht_get_error_code(void) {
 	uart_puts(data, 5);
 }
 
+void jht_lcb_initialize(void) {
+	char data[5];   
 
+	data[0] = 0x00;
+	data[1] = 0xFF;
+	data[2] = 0x70;
+	data[3] = 0x00;
+	data[4] = Get_CRC8(data, 4);
+	uart_puts(data, 5);
+}
 
 void jht_get_rpm(void) {
 	char data[5];   
 
 	data[0] = 0x00;
 	data[1] = 0xFF;
-	data[2] = 0x63;//0xF9;
+	data[2] = 0xF9;
 	data[3] = 0x00;
 	data[4] = Get_CRC8(data, 4);
 	uart_puts(data, 5);
 }
 
+void jht_set_operate_status(void) {
+	char data[6];   
 
-
+	data[0] = 0x00;
+	data[1] = 0xFF;
+	data[2] = 0xF5;
+	data[3] = 0x01;
+	data[4] = 0x00;
+	data[5] = Get_CRC8(data, sizeof(data)-1);
+	uart_puts(data, sizeof(data));
+}
 
 int main(int argc, char **argv) {
 
@@ -266,29 +284,19 @@ int main(int argc, char **argv) {
 	}
 	setRTS(fd, 0); // set to listen mode 
 	usleep(10*1000);
+	
 
-
-
-
-	// set fixture to URE 30
-
-	jht_get_status();
+	jht_lcb_initialize();
 	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
 	sleep(1);
 
-	// wayne say : if not zero , need get error code once
-	if (rx_buf[3] != 0) {
-		jht_get_error_code();
-		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
-		sleep(1);
+	jht_get_error_code();
+	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
+	sleep(1);
 
-		jht_get_status();
-		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
-		sleep(1);
-	}
-
-
-
+	jht_set_operate_status();
+	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
+	sleep(1);
 
 	while (run_flag) {
 		jht_get_rpm();
@@ -296,14 +304,7 @@ int main(int argc, char **argv) {
 		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
 		if (len > 0) {
 			// process rx
-
-			// checkk CRC
-			if (Get_CRC8(rx_buf, len-1) == rx_buf[len-1]) {
-				// print rpm
-				if ((rx_buf[0] == 0x01) && (rx_buf[2] == 0x63)) {
-					printf("rpm: %d\n", (rx_buf[4] << 8) | rx_buf[5]);
-				}
-			}
+			// hrm8700_process_rx_data(rx_buf, len);
 		}
 
         sleep(1);
