@@ -11,6 +11,8 @@
 #include <termios.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <asm-generic/ioctls.h> /* TIOCGRS485 + TIOCSRS485 ioctl definitions */
+#include <linux/serial.h>
 
 #define MAX_REPLY_SIZE 128
 
@@ -58,23 +60,34 @@ unsigned char Get_CRC8(char *Ptr, unsigned char DtaLen)
 	return  CRC_Data;
 }
 
-int setRTS(int fd, int level)
+int rs485_enable(const int fd, bool enable)
 {
-	int status;
+	struct serial_rs485 rs485conf;
+	int res;
 
-	if (ioctl(fd, TIOCMGET, &status) == -1) {
-		perror("setRTS(): TIOCMGET");
-		return 0;
+	/* Get configure from device */
+	res = ioctl(fd, TIOCGRS485, &rs485conf);
+	if (res < 0) {
+		perror("Ioctl error on getting 485 configure:");
+		return res;
 	}
-	if (level == 0)
-		status |= TIOCM_RTS;	// RTS low
-	else
-		status &= ~TIOCM_RTS;	// RTS high
-	if (ioctl(fd, TIOCMSET, &status) == -1) {
-		perror("setRTS(): TIOCMSET");
-		return 0;
+
+	/* Set enable/disable to configure */
+	if (enable) {	// Enable rs485 mode
+		rs485conf.flags |= SER_RS485_ENABLED;
+	} else {		// Disable rs485 mode
+		rs485conf.flags &= ~(SER_RS485_ENABLED);
 	}
-	return 1;
+
+	rs485conf.delay_rts_before_send = 0x00000004;
+
+	/* Set configure to device */
+	res = ioctl(fd, TIOCSRS485, &rs485conf);
+	if (res < 0) {
+		perror("Ioctl error on setting 485 configure:");
+	}
+
+	return res;
 }
 
 int uart_init(void)
@@ -102,7 +115,7 @@ int uart_init(void)
 		s_alicat.c_oflag &= ~(OPOST);
 
 		/* control modes - set 8 bit chars */
-		s_alicat.c_cflag |= (CS8);//| CRTSCTS);
+		s_alicat.c_cflag |= (CS8);
 
 		/* local modes - clear giving: echoing off, canonical off (no erase with 
 		   backspace, ^U,...),  no extended functions, no signal chars (^Z,^C) */
@@ -135,14 +148,7 @@ int uart_puts(const char *msg, int len)
 {
 	int n = 0;
 
-	// for JHT LCB	
-	setRTS(fd, 1);
-	usleep(2000);				// setup time
-
 	n = write(fd, msg, len);
-
-	setRTS(fd, 1);
-	usleep((len*1000)+2000);	// hold time
 
 	if (debug) {
 		printf("Uart_write - len:%d\n", n);
@@ -159,8 +165,6 @@ int uart_gets(char *msg, int len)
 	int ret;
 	int n = 0;
 
-	setRTS(fd, 0); // set to listen mode 
-
 	FD_ZERO(&fds);
 	FD_SET(fd, &fds);
 	timeout.tv_sec = 0;
@@ -170,7 +174,7 @@ int uart_gets(char *msg, int len)
 		n = read(fd, msg, len);
 	}
 
-	if (debug){
+	if (debug) {
 		if (n > 0) {
 			printf("Uart_read - len:%d \n", n); 
 			printBytes(msg, n);
@@ -250,9 +254,9 @@ int main(int argc, char **argv) {
 	if ( 0 != uart_init()) {
 		return -1;
 	}
-	setRTS(fd, 0); // set to listen mode 
-	usleep(10*1000);
 
+	if ( rs485_enable(fd, true) < 0 )
+		printf("rs485_enable fail\n");
 
 	// set fixture to URE 30
 
