@@ -12,12 +12,10 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 
-
 #define MAX_REPLY_SIZE 128
 
-#define DEBUG 1
-
-int fd;
+static int fd;
+static int debug = 0;
 volatile sig_atomic_t run_flag = 1;
 
 static void exit_handler(int sig) {	// can be called asynchronously
@@ -30,6 +28,7 @@ void printBytes(const char *data, int len)
 
 	for (i = 0; i < len; i++)
 		printf("0x%02X ", data[i]);
+
 	printf("\n");
 }
 
@@ -37,15 +36,6 @@ static unsigned char Lcb_CRC8_Table[16] =
 { 0x00, 0x31, 0x62, 0x53, 0xC4, 0xF5, 0xA6, 0x97, 0xB9, 0x88,
 	0xDB, 0xEA, 0x7D, 0x4C, 0x1F, 0x2E};
 
-/* Private function prototypes -----------------------------------------------*/
-/* Private functions ---------------------------------------------------------*/
-//*****************************************************************************
-//* Function Name  : DEV_RS485_Get_CRC8
-//* Description    :
-//* Input          : None
-//* Output         : None
-//* Return         : None
-//*****************************************************************************
 unsigned char Get_CRC8(char *Ptr, unsigned char DtaLen)
 {
 	unsigned char  CRC_Count;
@@ -147,17 +137,18 @@ int uart_puts(const char *msg, int len)
 
 	// for JHT LCB	
 	setRTS(fd, 1);
-	usleep(2000);
+	usleep(2000);				// setup time
 
 	n = write(fd, msg, len);
 
 	setRTS(fd, 1);
-	usleep((len*1000)+2000);
+	usleep((len*1000)+2000);	// hold time
 
-#ifdef DEBUG
-	printf("Uart_write - len:%d\n", n);
-	printBytes(msg, n);
-#endif
+	if (debug) {
+		printf("Uart_write - len:%d\n", n);
+		printBytes(msg, n);
+	}
+
 	return n;
 }
 
@@ -179,78 +170,63 @@ int uart_gets(char *msg, int len)
 		n = read(fd, msg, len);
 	}
 
-#ifdef DEBUG
-	if (n > 0) {
-		printf("Uart_read - len:%d \n", n); 
-		printBytes(msg, n);
+	if (debug){
+		if (n > 0) {
+			printf("Uart_read - len:%d \n", n); 
+			printBytes(msg, n);
+		}
 	}
-#endif
+
 	return n;
 }
 
-
-
-void pr_buf(const char * data, int length)
-{
-	int i;
-	for (i=0; i<length; i++) {
-		printf("0x%02X", data[i]);
-		printf(" ");
-	}
-	printf("\n");
-}
-
-
-
-
 void jht_get_version(void) {
-	char data[5];   
+#define CMD_SIZE 5
+	char data[CMD_SIZE];
 
 	data[0] = 0x00;
 	data[1] = 0xFF;
 	data[2] = 0x73;
 	data[3] = 0x00;
-	data[4] = Get_CRC8(data, 4);
-	uart_puts(data, 5);
+	data[4] = Get_CRC8(data, CMD_SIZE-1);
+	uart_puts(data, CMD_SIZE);
 }
 
 void jht_get_status(void) {
-	char data[5];   
+#define CMD_SIZE 5
+	char data[CMD_SIZE];
 
 	data[0] = 0x00;
 	data[1] = 0xFF;
 	data[2] = 0x71;
 	data[3] = 0x00;
-	data[4] = Get_CRC8(data, 4);
-	uart_puts(data, 5);
+	data[4] = Get_CRC8(data, CMD_SIZE-1);
+	uart_puts(data, CMD_SIZE);
 }
 
 void jht_get_error_code(void) {
-	char data[5];   
+#define CMD_SIZE 5
+	char data[CMD_SIZE];
 
 	data[0] = 0x00;
 	data[1] = 0xFF;
 	data[2] = 0x72;
 	data[3] = 0x00;
-	data[4] = Get_CRC8(data, 4);
-	uart_puts(data, 5);
+	data[4] = Get_CRC8(data, CMD_SIZE-1);
+	uart_puts(data, CMD_SIZE);
 }
 
-
-
 void jht_get_rpm(void) {
-	char data[5];   
+#define CMD_SIZE 5
+	char data[CMD_SIZE];
 
 	data[0] = 0x00;
 	data[1] = 0xFF;
 	data[2] = 0x63;//0xF9;
 	data[3] = 0x00;
-	data[4] = Get_CRC8(data, 4);
-	uart_puts(data, 5);
+	data[4] = Get_CRC8(data, CMD_SIZE-1);
+	uart_puts(data, CMD_SIZE);
 }
-
-
-
 
 int main(int argc, char **argv) {
 
@@ -261,13 +237,21 @@ int main(int argc, char **argv) {
 	// Register signals
 	signal(SIGINT, exit_handler);
 
+	if (argv[1] != NULL) {
+		if (0 == strcmp(argv[1], "--debug")) {
+			debug = 1;
+			printf("print uart trx \n");
+		} else {
+			printf("unsupport command:%s\n", argv[1]);
+			return -1;
+		}
+	}
+
 	if ( 0 != uart_init()) {
 		return -1;
 	}
 	setRTS(fd, 0); // set to listen mode 
 	usleep(10*1000);
-
-
 
 
 	// set fixture to URE 30
@@ -287,8 +271,9 @@ int main(int argc, char **argv) {
 		sleep(1);
 	}
 
-
-
+	jht_get_version();
+	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
+	printf("version: %x %x\n", rx_buf[5], rx_buf[4]);
 
 	while (run_flag) {
 		jht_get_rpm();
@@ -297,16 +282,22 @@ int main(int argc, char **argv) {
 		if (len > 0) {
 			// process rx
 
-			// checkk CRC
-			if (Get_CRC8(rx_buf, len-1) == rx_buf[len-1]) {
-				// print rpm
-				if ((rx_buf[0] == 0x01) && (rx_buf[2] == 0x63)) {
-					printf("rpm: %d\n", (rx_buf[4] << 8) | rx_buf[5]);
+			// is header 0x01 ?
+			if (rx_buf[0] == 0x01) {
+				// checkk CRC
+				if (Get_CRC8(rx_buf, len-1) == rx_buf[len-1]) {
+					// print rpm
+					if (rx_buf[2] == 0x63) {
+						printf("rpm: %d\n", (rx_buf[4] << 8) | rx_buf[5]);
+					}
+				} else {
+					printf("crc8 is dismatch 0x%02X 0x%02X\n", Get_CRC8(rx_buf, len-1), rx_buf[len-1]);
 				}
+			} else {
+				printf("header is not 0x01\n");
 			}
 		}
-
-        sleep(1);
+		sleep(1);
 	}
 
 	close(fd);
