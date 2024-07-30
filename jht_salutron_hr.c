@@ -13,7 +13,8 @@
 
 #define MAX_REPLY_SIZE 128
 
-int fd;
+static int fd;
+static int debug = 0;
 volatile sig_atomic_t run_flag = 1;
 
 static void exit_handler(int sig) {	// can be called asynchronously
@@ -26,6 +27,7 @@ void printBytes(const char *data, int len)
 
 	for (i = 0; i < len; i++)
 		printf("0x%02X ", data[i]);
+
 	printf("\n");
 }
 
@@ -89,10 +91,11 @@ int uart_puts(const char *msg, int len)
 
 	n = write(fd, msg, len);
 
-#ifdef DEBUG
-	printf("Uart_write - len:%d\n", n);
-	printBytes(msg, n);
-#endif
+	if (debug) {
+		printf("Uart_write - len:%d\n", n);
+		printBytes(msg, n);
+	}
+
 	return n;
 }
 
@@ -112,12 +115,13 @@ int uart_gets(char *msg, int len)
 		n = read(fd, msg, len);
 	}
 
-#ifdef DEBUG
-	if (n > 0) {
-		printf("Uart_read - len:%d \n", n); 
-		printBytes(msg, n);
+	if (debug) {
+		if (n > 0) {
+			printf("Uart_read - len:%d \n", n); 
+			printBytes(msg, n);
+		}
 	}
-#endif
+
 	return n;
 }
 
@@ -241,51 +245,6 @@ void hrm8700_stop_workout(void) {
 	uart_puts(data, sizeof(data));
 }
 
-bool hrm8700_process_workout_rx_data(const char *data, const int length)
-{
-	int len = 0, idx = 0;
-	unsigned short checksum;
-	bool ret = false;
-
-	while (idx < length) {
-
-		if (data[idx + 0] == 0xA ) {
-			len = data[idx + 1];
-
-			checksum = Fletcher16(&data[idx + 4], len-4);  // -4 : command - length - checksum low - checksum high
-
-			if ( checksum == (data[idx + 2] | data[idx + 3] << 8) ) {
-				if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x07) ) {
-					printf("workout %s\n", (data[idx + 7] == 1) ? "success" : "fail");
-					ret = (data[idx + 7] == 1) ? true : false;
-				} else {
-					printf("print unprocess rx 1 at %s\n", __func__);
-					pr_buf(&data[idx], length-idx);
-				}
-			} else {
-				printf("checksum not match \n");
-				printf("0x%02X", checksum);
-				printf("\n");
-				printf("0x%02X",(data[idx + 2] | data[idx + 3] << 8));
-				printf("\n");
-
-				printf("print unprocess rx 2 at %s\n", __func__);
-				pr_buf(&data[idx], length-idx);
-			}
-
-			idx += len;
-
-		} else {
-			printf("print unprocess rx 3 at %s\n", __func__);
-			pr_buf(&data[idx], length-idx);
-			idx++;
-			//break;
-		}
-	}
-
-	return ret;
-}
-
 void hrm8700_enable_hr_with_rr_interval(bool rr_enable) {
 	char data[8];
 	unsigned short checksum;
@@ -304,8 +263,6 @@ void hrm8700_enable_hr_with_rr_interval(bool rr_enable) {
 	data[3] = checksum >> 8;
 	uart_puts(data, sizeof(data));
 }
-
-
 
 bool hrm8700_process_rx_data(const char *data, const int length)
 {
@@ -341,17 +298,13 @@ bool hrm8700_process_rx_data(const char *data, const int length)
 					printf("[%ld] hand off\n", ms);
 					ret = true;
 				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0c) && (data[idx + 6] == 0x23) ) {
-					printf("[%ld] hr: ", ms);
-					printf("%d", data[idx + 7]);
-					printf("\n");
+					printf("[%ld] hr: %d \n", ms, data[idx + 7]);
 					ret = true;
 				} else if ((data[idx + 4] == 0x00) && (data[idx + 5] == 0x0F) && (data[idx + 6] == 0x14) ) {
-					printf("[%ld] rr: ", ms);
-					printf("%d", ((data[idx + 8] << 8) | data[idx + 7]));
-					printf("\n");
+					printf("[%ld] rr: %d \n", ms, ((data[idx + 8] << 8) | data[idx + 7]));
 					ret = true;
 				} else {
-					printf("print unprocess rx 1 at %s\n", __func__);
+					printf("print unprocess rx 1, idx:%d\n", idx);
 					pr_buf(&data[idx], length-idx);
 				}
 			} else {
@@ -361,14 +314,14 @@ bool hrm8700_process_rx_data(const char *data, const int length)
 				printf("0x%02X",(data[idx + 2] | data[idx + 3] << 8));
 				printf("\n");
 
-				printf("print unprocess rx 2 at %s\n", __func__);
+				printf("print unprocess rx 2, idx:%d\n", idx);
 				pr_buf(&data[idx], length-idx);
 			}
 
 			idx += len;
 
 		} else {
-			printf("print unprocess rx 3 at %s\n", __func__);
+			printf("print unprocess rx 3, idx:%d\n", idx);
 			pr_buf(&data[idx], length-idx);
 			break;
 		}
@@ -388,6 +341,16 @@ int main(int argc, char **argv) {
 	// Register signals
 	signal(SIGINT, exit_handler);
 
+	if (argv[1] != NULL) {
+		if (0 == strcmp(argv[1], "--debug")) {
+			debug = 1;
+			printf("print uart trx \n");
+		} else {
+			printf("unsupport command:%s\n", argv[1]);
+			return -1;
+		}
+	}
+
 	if ( 0 != uart_init()) {
 		return -1;
 	}
@@ -396,7 +359,7 @@ int main(int argc, char **argv) {
 	hrm8700_start_workout(1);
 	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
 	if (len > 0)
-		hrm8700_process_workout_rx_data(rx_buf, len);
+		hrm8700_process_rx_data(rx_buf, len);
 
 	usleep(500*1000); // wait at least 500ms
 
