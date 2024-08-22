@@ -17,13 +17,14 @@
 #define MAX_REPLY_SIZE 128
 
 typedef enum {
-	BIKE = 0,
-	TREADMILL = 1,
+	UNKNOW = 0,
+	BIKE = 1,
+	TREADMILL = 2,
 } JHT_LCB_TYPE_t;
 
 static int fd;
 static int debug = 0;
-static JHT_LCB_TYPE_t lcb_type = BIKE;
+static JHT_LCB_TYPE_t lcb_type = UNKNOW;
 volatile sig_atomic_t run_flag = 1;
 
 static void exit_handler(int sig) {	// can be called asynchronously
@@ -197,6 +198,8 @@ int uart_gets(char *msg, int len)
 	ret = select(FD_SETSIZE, &fds, NULL, NULL, &timeout);
 	if (ret == 1) {
 		n = read(fd, msg, len);
+	} else {
+		memset(msg, 0, len);
 	}
 
 	if (debug) {
@@ -234,11 +237,11 @@ void jht_get_error_code(void) {
 }
 
 void jht_get_rpm(void) {
-	char data[ ] = {0x00, 0xFF, 0x63, 0x00, 0x00};	// bike
+	char data[ ] = {0x00, 0xFF, 0x63, 0x00, 0x00};	// 0x63 bike
 	int cmd_size = sizeof(data);
 
 	if (lcb_type == TREADMILL) {
-		data[2] = 0xF9;		// treadmill
+		data[2] = 0xF9;
 	}
 
 	data[cmd_size-1] = Get_CRC8(data, cmd_size-1);
@@ -248,8 +251,8 @@ void jht_get_rpm(void) {
 int main(int argc, char **argv) {
 
 	int ret = 0;
-	char rx_buf[MAX_REPLY_SIZE];
-	int len;
+	char rx_buf[MAX_REPLY_SIZE], previous_data = -1;
+	int len, retry = 1;
 
 	// Register signals
 	signal(SIGINT, exit_handler);
@@ -273,35 +276,37 @@ int main(int argc, char **argv) {
 
 	// set fixture to URE 30
 
-	jht_get_status();
-	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
-	sleep(1);
-
-	if (rx_buf[3] != 0) {
-		jht_get_error_code();
+	// read version once more to confirm lcb_type
+	do {
+		jht_get_version();
 		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
+		printf("version: %x %x\n", rx_buf[5], rx_buf[4]);
+		if (len > 0) {
+
+			if (previous_data != rx_buf[5])
+				retry = 1;
+			else				
+				retry = 0;
+
+			previous_data = rx_buf[5];
+
+			if ((rx_buf[5] == 4) || (rx_buf[5] == 7)) {
+				lcb_type = BIKE;
+				printf("lcb is BIKE\n");
+			} else {
+				lcb_type = TREADMILL;
+				printf("lcb is TREADMILL\n");
+			}
+		}
 		sleep(1);
-
-		jht_get_status();
-		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
-		sleep(1);
-	}
-
-	jht_get_version();
-	len = uart_gets(rx_buf, MAX_REPLY_SIZE);
-	printf("version: %x %x\n", rx_buf[5], rx_buf[4]);
-
-	if ((rx_buf[5] == 4) || (rx_buf[5] == 7)) {
-		lcb_type = BIKE;
-	} else {
-		lcb_type = TREADMILL;
-	}
+	} while (retry);
 
 
+	// read rpm 
 	while (run_flag) {
-		jht_get_rpm();
+		jht_get_rpm();	// soc -> lcb
 
-		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
+		len = uart_gets(rx_buf, MAX_REPLY_SIZE);  // lcb -> soc
 		if (len > 0) {
 			// process rx
 
@@ -310,9 +315,9 @@ int main(int argc, char **argv) {
 				// checkk CRC
 				if (Get_CRC8(rx_buf, len-1) == rx_buf[len-1]) {
 					// print rpm
-					if (rx_buf[2] == 0x63)
+					if (rx_buf[2] == 0x63)	// BIKE
 						printf("rpm: %d\n", (rx_buf[4] << 8) | rx_buf[5]);
-					else if (rx_buf[2] == 0xF9)
+					else if (rx_buf[2] == 0xF9)	// TREADMILL
 						printf("rpm: %d\n", (rx_buf[4] << 8) | rx_buf[5]);
 				} else {
 					printf("crc8 is dismatch 0x%02X 0x%02X\n", Get_CRC8(rx_buf, len-1), rx_buf[len-1]);
