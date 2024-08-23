@@ -16,6 +16,9 @@
 
 #define MAX_REPLY_SIZE 128
 
+#define GREEN "\033[1;32m"
+#define NONE "\033[m"
+
 typedef enum {
 	UNKNOW = 0,
 	BIKE = 1,
@@ -276,7 +279,7 @@ int main(int argc, char **argv) {
 
 	// set fixture to URE 30
 
-	// read version once more to confirm lcb_type
+	// read version several times to confirm lcb_type
 	do {
 		jht_get_version();
 		len = uart_gets(rx_buf, MAX_REPLY_SIZE);
@@ -284,22 +287,22 @@ int main(int argc, char **argv) {
 		if (len > 0) {
 
 			if (previous_data != rx_buf[5])
-				retry = 1;
-			else				
-				retry = 0;
+				retry = 2;
+			else
+				retry--;
 
 			previous_data = rx_buf[5];
-
-			if ((rx_buf[5] == 4) || (rx_buf[5] == 7)) {
-				lcb_type = BIKE;
-				printf("lcb is BIKE\n");
-			} else {
-				lcb_type = TREADMILL;
-				printf("lcb is TREADMILL\n");
-			}
 		}
 		sleep(1);
 	} while (retry);
+
+	if ((rx_buf[5] == 4) || (rx_buf[5] == 7)) {
+		lcb_type = BIKE;
+		printf(GREEN "lcb is BIKE\n" NONE );
+	} else {
+		lcb_type = TREADMILL;
+		printf(GREEN "lcb is TREADMILL\n" NONE );
+	}
 
 
 	// read rpm 
